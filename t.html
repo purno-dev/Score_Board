@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<title>Scoreboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font: "Chakra Petch", "Rajdhani", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --digits: "Orbitron", "Chakra Petch", system-ui, sans-serif;
+    --panel-bg: #1b1b1f;
+    --panel-fg: #f2f2f5;
+    --line: #34343b;
+    --accent: #4d8dff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: #111; font-family: var(--font); }
+  body { user-select: none; -webkit-user-select: none; }
+
+  /* ---------- Board ---------- */
+  .board { display: flex; height: 100%; width: 100%; }
+  .team {
+    position: relative; flex: 1 1 50%; min-width: 0; overflow: hidden; isolation: isolate;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.5vh; padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom);
+    background: var(--bg); color: var(--fg);
+    cursor: pointer; touch-action: manipulation; outline: none;
+    transition: background-color .2s, color .2s;
+  }
+  .team:focus-visible { outline: 4px solid var(--fg); outline-offset: -8px; }
+  .team:active .score { transform: scale(.96); }
+
+  .name { display: flex; flex-direction: column; align-items: center; max-width: 92%; }
+  .name-text {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-weight: 700; font-size: clamp(1.6rem, 9vmin, 5rem); line-height: 1.1;
+    letter-spacing: .06em; text-transform: uppercase; text-shadow: 0 2px 14px rgba(0,0,0,.28);
+  }
+  .crown {
+    width: clamp(2.4rem, 10vmin, 5rem); height: auto; margin-bottom: .15em;
+    opacity: 0; transform: translateY(14px) scale(.4) rotate(-12deg);
+    transition: opacity .35s, transform .55s cubic-bezier(.2, 1.5, .4, 1);
+    filter: drop-shadow(0 0 10px rgba(255,200,60,.85));
+  }
+  .team.leader .crown { opacity: 1; transform: none; animation: float 2.6s ease-in-out .6s infinite; }
+  @keyframes float { 50% { transform: translateY(-6px) rotate(2deg); } }
+
+  .score {
+    --len: 2;
+    font-family: var(--digits); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums;
+    font-size: min(36vh, calc(44vw / (var(--len) * .8)));
+    text-shadow: 0 0.04em 0.12em rgba(0, 0, 0, 0.24);
+    transition: transform .1s;
+  }
+  .score.bump { animation: bump .18s ease-out; }
+  @keyframes bump { 50% { transform: scale(1.08); } }
+
+  .divider {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; transform: translateX(-1.5px);
+    pointer-events: none; z-index: 1;
+    background: linear-gradient(to bottom, transparent, rgba(255,255,255,.9) 20%, rgba(255,255,255,.9) 80%, transparent);
+    box-shadow: 0 0 14px 3px rgba(255,255,255,.45);
+  }
+
+  /* ---------- Round buttons ---------- */
+  .round {
+    width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0;
+    display: grid; place-items: center; cursor: pointer;
+    background: rgba(255,255,255,.88); color: #222; font: 600 22px/1 var(--font);
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  }
+  .round:hover { background: #fff; }
+  .round:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .round svg { width: 22px; height: 22px; }
+  .minus { position: absolute; bottom: calc(env(safe-area-inset-bottom) + 16px); }
+  .team:first-child .minus { left: 16px; }
+  .team:last-of-type .minus { right: 16px; }
+  #openSettings { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 16px); transform: translateX(-50%); z-index: 2; }
+
+  /* ---------- Settings dialog ---------- */
+  dialog {
+    width: min(560px, calc(100vw - 24px)); max-height: calc(100% - 24px);
+    padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: auto;
+    background: var(--panel-bg); color: var(--panel-fg); user-select: text; -webkit-user-select: text;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .dlg-head h2 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+  .dlg-head .round { width: 34px; height: 34px; font-size: 18px; background: #2a2a31; color: var(--panel-fg); box-shadow: none; }
+  .teams { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
+  @media (max-width: 480px) { .teams { grid-template-columns: 1fr; } }
+  fieldset { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 12px; min-width: 0; }
+  legend { padding: 0 6px; font-weight: 500; }
+  label { display: grid; gap: 5px; font-size: .85rem; color: #b9b9c4; }
+  input[type=text], input[type=number] {
+    width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: #121216; color: var(--panel-fg); font: 500 1rem var(--font);
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input.invalid { border-color: #ff5a5a; }
+  .color-row { display: flex; gap: 8px; }
+  .color-row input[type=color] { flex: none; width: 44px; height: 40px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #121216; cursor: pointer; }
+  .hint { color: #ff8a8a; font-size: .78rem; min-height: 1em; }
+  .dlg-foot { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 20px 20px; }
+  .btn { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: #26262d; color: var(--panel-fg); font: 500 .9rem var(--font); cursor: pointer; }
+  .btn:hover { background: #30303a; }
+  .btn.danger { border-color: #7a3030; color: #ff9b9b; }
+  .btn.primary { margin-left: auto; background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<main class="board" id="board">
+  <section class="team" id="team0" role="button" tabindex="0" aria-label="Team 1 score. Press to add one point.">
+    <div class="name">
+      <svg class="crown" viewBox="0 0 64 48" aria-hidden="true">
+        <defs><linearGradient id="gold0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE27A"/><stop offset="1" stop-color="#FFA800"/></linearGradient></defs>
+        <path d="M5 40 L2 12 L19 26 L32 5 L45 26 L62 12 L59 40 Z" fill="url(#gold0)" stroke="#8A5A00" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="5" y="40" width="54" height="6" rx="2" fill="#FFB800" stroke="#8A5A00" stroke-width="2"/>
+        <circle cx="2" cy="12" r="3" fill="#FFE27A"/><circle cx="32" cy="5" r="3.5" fill="#FFE27A"/><circle cx="62" cy="12" r="3" fill="#FFE27A"/>
+      </svg>
+      <span class="name-text"></span>
+    </div>
+    <div class="score" aria-live="polite"></div>
+    <button class="round minus" type="button" aria-label="Subtract one point from team 1">&minus;</button>
+  </section>
+  <section class="team" id="team1" role="button" tabindex="0" aria-label="Team 2 score. Press to add one point.">
+    <div class="name">
+      <svg class="crown" viewBox="0 0 64 48" aria-hidden="true">
+        <defs><linearGradient id="gold1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE27A"/><stop offset="1" stop-color="#FFA800"/></linearGradient></defs>
+        <path d="M5 40 L2 12 L19 26 L32 5 L45 26 L62 12 L59 40 Z" fill="url(#gold1)" stroke="#8A5A00" stroke-width="2" stroke-linejoin="round"/>
+        <rect x="5" y="40" width="54" height="6" rx="2" fill="#FFB800" stroke="#8A5A00" stroke-width="2"/>
+        <circle cx="2" cy="12" r="3" fill="#FFE27A"/><circle cx="32" cy="5" r="3.5" fill="#FFE27A"/><circle cx="62" cy="12" r="3" fill="#FFE27A"/>
+      </svg>
+      <span class="name-text"></span>
+    </div>
+    <div class="score" aria-live="polite"></div>
+    <button class="round minus" type="button" aria-label="Subtract one point from team 2">&minus;</button>
+  </section>
+  <div class="divider"></div>
+  <button class="round" id="openSettings" type="button" aria-label="Open settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+</main>
+
+<dialog id="settings" aria-labelledby="settingsTitle">
+  <div class="dlg-head">
+    <h2 id="settingsTitle">Scoreboard settings</h2>
+    <button class="round" type="button" id="closeX" aria-label="Close settings">&times;</button>
+  </div>
+  <div class="teams">
+    <fieldset>
+      <legend>Left team</legend>
+      <label>Team name <input type="text" data-team="0" data-field="name" maxlength="24"></label>
+      <label>Color
+        <span class="color-row">
+          <input type="color" data-team="0" data-field="picker" aria-label="Pick left team color">
+          <input type="text" data-team="0" data-field="hex" maxlength="7" spellcheck="false" autocapitalize="off" placeholder="#0B5FFF">
+        </span>
+        <span class="hint" data-hint="0"></span>
+      </label>
+      <label>Score <input type="number" data-team="0" data-field="score" min="0" max="9999" step="1" inputmode="numeric"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Right team</legend>
+      <label>Team name <input type="text" data-team="1" data-field="name" maxlength="24"></label>
+      <label>Color
+        <span class="color-row">
+          <input type="color" data-team="1" data-field="picker" aria-label="Pick right team color">
+          <input type="text" data-team="1" data-field="hex" maxlength="7" spellcheck="false" autocapitalize="off" placeholder="#E5173F">
+        </span>
+        <span class="hint" data-hint="1"></span>
+      </label>
+      <label>Score <input type="number" data-team="1" data-field="score" min="0" max="9999" step="1" inputmode="numeric"></label>
+    </fieldset>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn" type="button" id="resetScores">Reset scores</button>
+    <button class="btn danger" type="button" id="resetAll">Reset everything</button>
+    <button class="btn" type="button" id="fullscreen">Fullscreen</button>
+    <button class="btn primary" type="button" id="closeBtn">Done</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  'use strict';
+
+  const STORAGE_KEY = 'scoreboard:v1';
+  const MAX_SCORE = 9999;
+  const DEFAULTS = () => ({
+    teams: [
+      { name: 'Team 1', color: '#0B5FFF', score: 0 },
+      { name: 'Team 2', color: '#E5173F', score: 0 }
+    ]
+  });
+
+  /* ---------- State + persistence ---------- */
+  const HEX_RE = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+  function normalizeHex(value) {
+    const m = String(value).trim().match(HEX_RE);
+    if (!m) return null;
+    let h = m[1].toUpperCase();
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    return '#' + h;
+  }
+
+  function clampScore(n) {
+    n = Math.floor(Number(n));
+    return Number.isFinite(n) ? Math.min(MAX_SCORE, Math.max(0, n)) : 0;
+  }
+
+  function load() {
+    const base = DEFAULTS();
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved && Array.isArray(saved.teams)) {
+        saved.teams.slice(0, 2).forEach((t, i) => {
+          if (!t) return;
+          if (typeof t.name === 'string') base.teams[i].name = t.name.slice(0, 24);
+          const hex = normalizeHex(t.color || '');
+          if (hex) base.teams[i].color = hex;
+          base.teams[i].score = clampScore(t.score);
+        });
+      }
+    } catch (e) { /* empty or blocked storage: use defaults */ }
+    return base;
+  }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
+  }
+
+  let state = load();
+
+  /* ---------- Rendering ---------- */
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const panels = [$('#team0'), $('#team1')];
+
+  function readableText(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map(v => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return lum > 0.45 ? '#141414' : '#F4F4F8';
+  }
+
+  function render(bumpIndex) {
+    const [a, b] = state.teams.map(t => t.score);
+    const lead = a === b ? -1 : (a > b ? 0 : 1); // crown goes to the team ahead; none on a tie
+    state.teams.forEach((t, i) => {
+      const el = panels[i];
+      el.style.setProperty('--bg', t.color);
+      el.style.setProperty('--fg', readableText(t.color));
+      $('.name-text', el).textContent = t.name || 'Team ' + (i + 1);
+      el.classList.toggle('leader', i === lead);
+      const scoreEl = $('.score', el);
+      scoreEl.textContent = t.score;
+      scoreEl.style.setProperty('--len', Math.max(2, String(t.score).length));
+      if (i === bumpIndex) {
+        scoreEl.classList.remove('bump');
+        void scoreEl.offsetWidth;
+        scoreEl.classList.add('bump');
+      }
+      el.setAttribute('aria-label', (t.name || 'Team ' + (i + 1)) + ' score ' + t.score + (i === lead ? ', leading' : '') + '. Press to add one point.');
+    });
+  }
+
+  function change(i, delta) {
+    const next = clampScore(state.teams[i].score + delta);
+    if (next === state.teams[i].score) return;
+    state.teams[i].score = next;
+    save();
+    render(i);
+    syncFields();
+  }
+
+  /* ---------- Board interactions ---------- */
+  panels.forEach((el, i) => {
+    el.addEventListener('click', () => change(i, 1));
+    el.addEventListener('keydown', e => {
+      if (e.target !== el) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); change(i, 1); }
+      if (e.key === 'ArrowDown' || e.key === '-') { e.preventDefault(); change(i, -1); }
+    });
+    $('.minus', el).addEventListener('click', e => { e.stopPropagation(); change(i, -1); });
+  });
+
+  /* ---------- Settings dialog ---------- */
+  const dlg = $('#settings');
+  const field = (i, name) => $(`[data-team="${i}"][data-field="${name}"]`, dlg);
+
+  function syncFields() {
+    state.teams.forEach((t, i) => {
+      const set = (name, val) => { const f = field(i, name); if (document.activeElement !== f) f.value = val; };
+      set('name', t.name);
+      set('hex', t.color);
+      set('score', t.score);
+      field(i, 'picker').value = t.color.toLowerCase();
+      field(i, 'hex').classList.remove('invalid');
+      $(`[data-hint="${i}"]`, dlg).textContent = '';
+    });
+  }
+
+  dlg.addEventListener('input', e => {
+    const f = e.target;
+    const i = Number(f.dataset.team);
+    if (Number.isNaN(i)) return;
+    const t = state.teams[i];
+
+    if (f.dataset.field === 'name') {
+      t.name = f.value.slice(0, 24);
+    } else if (f.dataset.field === 'score') {
+      if (f.value === '') return;
+      t.score = clampScore(f.value);
+    } else if (f.dataset.field === 'picker') {
+      t.color = normalizeHex(f.value);
+      field(i, 'hex').value = t.color;
+    } else if (f.dataset.field === 'hex') {
+      const hex = normalizeHex(f.value);
+      const hint = $(`[data-hint="${i}"]`, dlg);
+      f.classList.toggle('invalid', !hex);
+      hint.textContent = hex ? '' : 'Enter a hex code like #0B5FFF or #F80.';
+      if (!hex) return;
+      t.color = hex;
+      field(i, 'picker').value = hex.toLowerCase();
+    }
+    save();
+    render();
+  });
+
+  // On leaving a field, restore any invalid or empty value to the saved one.
+  dlg.addEventListener('focusout', () => setTimeout(syncFields, 0));
+
+  $('#openSettings').addEventListener('click', e => { e.stopPropagation(); syncFields(); dlg.showModal(); });
+  $('#closeX').addEventListener('click', () => dlg.close());
+  $('#closeBtn').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+  $('#resetScores').addEventListener('click', () => {
+    if (!confirm('Set both scores back to 0?')) return;
+    state.teams.forEach(t => (t.score = 0));
+    save(); render(); syncFields();
+  });
+
+  $('#resetAll').addEventListener('click', () => {
+    if (!confirm('Reset scores, names and colors to the defaults?')) return;
+    state = DEFAULTS();
+    save(); render(); syncFields();
+  });
+
+  $('#fullscreen').addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+  });
+
+  /* Keep several open tabs in sync */
+  window.addEventListener('storage', e => {
+    if (e.key === STORAGE_KEY) { state = load(); render(); syncFields(); }
+  });
+
+  render();
+  syncFields();
+})();
+</script>
+</body>
+</html>
